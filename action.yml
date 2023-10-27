@@ -1,0 +1,94 @@
+name: Setup Papyrus-RT
+description: A GitHub Action which sets up your workflow with specified version of the Papyrus-RT standalone code generator.
+author: Hidekazu TAKAHASHI(Bacondish2023)
+inputs:
+  papyrusrt-version:
+    description: The version of Papyrus-RT. One of {1.0.0}. Default is latest release.
+    required: false
+    default: 1.0.0
+  is-setup-envvars:
+    description: The switch of environment variables definition. If true, the "PAPYRUSRT_ROOT" and "UMLRTS_ROOT" will be defined with corresponding values. Default is true.
+    required: false
+    default: true
+outputs:
+  papyrusrt-root:
+    description: The absolute path of the root directory of the Papyrus-RT. Without trailing slash.
+    value: ${{ steps.set-outputs.outputs.papyrusrt-root }}
+  umlrts-root:
+    description: The absolute path of the root directory of the Runtime Service Library. Without trailing slash.
+    value: ${{ steps.set-outputs.outputs.umlrts-root }}
+
+runs:
+  using: composite
+  steps:
+    - name: Sanity check
+      run:  |
+            if [ -d "${{ github.action_path }}/papyrusrt/${{ inputs.papyrusrt-version }}" ]; then
+                echo Version ${{ inputs.papyrusrt-version }} is found.
+            else
+                echo Version ${{ inputs.papyrusrt-version }} is NOT found. Check input papyrusrt-version.
+                exit 1
+            fi
+      shell: bash
+
+    - name: Install
+      if: (runner.os == 'Linux') || (runner.os == 'macOs')
+      run:  |
+            sudo cp -r ${{ github.action_path }}/papyrusrt /opt
+            echo "/opt/papyrusrt/${{ inputs.papyrusrt-version }}" >".PAPYRUSRT_ROOT"
+            echo "/opt/papyrusrt/${{ inputs.papyrusrt-version }}/plugins/org.eclipse.papyrusrt.rts_1.0.0.201707181457/umlrts" >".UMLRTS_ROOT"
+      shell: bash
+
+    - name: Install
+      if: runner.os == 'Windows'
+      run:  |
+            if ( Test-Path -Path "${env:USERPROFILE}\tools" )
+            {
+                echo "Directory ${env:USERPROFILE}\tools already exists. Skip creation."
+            }
+            else
+            {
+                echo "Create ${env:USERPROFILE}\tools"
+                mkdir "${env:USERPROFILE}\tools"
+            }
+            echo "${env:USERPROFILE}\tools\papyrusrt\${{ inputs.papyrusrt-version }}" >".PAPYRUSRT_ROOT"
+            echo "${env:USERPROFILE}\tools\papyrusrt\${{ inputs.papyrusrt-version }}\plugins\org.eclipse.papyrusrt.rts_1.0.0.201707181457\umlrts" >".UMLRTS_ROOT"
+            robocopy ${{ github.action_path }}\papyrusrt "${env:USERPROFILE}\tools\papyrusrt" /MIR /R:2 /NP
+            if ( ${LASTEXITCODE} -le 3 )
+            {
+                exit 0
+            }
+            else
+            {
+                exit 1
+            }
+      shell: pwsh
+
+    - name: Set Outputs
+      id: set-outputs
+      run:  |
+            PAPYRUSRT_ROOT=`cat ".PAPYRUSRT_ROOT"`
+            UMLRTS_ROOT=`cat ".UMLRTS_ROOT"`
+            echo "papyrusrt-root=${PAPYRUSRT_ROOT}" >> $GITHUB_OUTPUT
+            echo "umlrts-root=${UMLRTS_ROOT}" >> $GITHUB_OUTPUT
+            rm ".PAPYRUSRT_ROOT"
+            rm ".UMLRTS_ROOT"
+      shell: bash
+
+    - name: Set Environment Variables
+      if: ( (inputs.is-setup-envvars == 'true') && ((runner.os == 'Linux') || (runner.os == 'macOs')) )
+      run:  |
+            echo "PAPYRUSRT_ROOT=${{ steps.set-outputs.outputs.papyrusrt-root }}" >> ${GITHUB_ENV}
+            echo "UMLRTS_ROOT=${{ steps.set-outputs.outputs.umlrts-root }}" >> ${GITHUB_ENV}
+      shell: bash
+
+    - name: Set Environment Variables
+      if: ( (inputs.is-setup-envvars == 'true') && (runner.os == 'Windows') )
+      run:  |
+            echo "PAPYRUSRT_ROOT=${{ steps.set-outputs.outputs.papyrusrt-root }}" | Out-File -FilePath ${env:GITHUB_ENV} -Encoding utf8 -Append
+            echo "UMLRTS_ROOT=${{ steps.set-outputs.outputs.umlrts-root }}" | Out-File -FilePath ${env:GITHUB_ENV} -Encoding utf8 -Append
+      shell: pwsh
+
+branding:
+  icon: code
+  color: blue

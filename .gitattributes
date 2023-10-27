@@ -15,6 +15,7 @@ LICENSE	text
 *.pdf	binary
 
 *.jar	binary
+*.class	binary
 
 *.bat	text
 *.sh	text

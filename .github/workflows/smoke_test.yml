@@ -1,0 +1,119 @@
+name: SmokeTest
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  UnitTest:
+    strategy:
+      matrix:
+        platform: ['ubuntu-latest', 'windows-latest', 'macos-latest']
+        papyrusrt-version: ['1.0.0']
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout VCS
+        uses: actions/checkout@v4
+      - name: Install Papyrus-RT
+        id:   install-papyrusrt
+        uses: ./
+        with:
+          papyrusrt-version: ${{ matrix.papyrusrt-version }}
+          is-setup-envvars:  false
+
+      - name: Check
+        if: (runner.os == 'Linux') || (runner.os == 'macOs')
+        run:    |
+                if [ "${{ matrix.papyrusrt-version }}" == "1.0.0" ]; then
+                    if [ "${{ steps.install-papyrusrt.outputs.papyrusrt-root }}" != "/opt/papyrusrt/1.0.0" ]; then
+                        exit 1
+                    fi
+                    if [ "${{ steps.install-papyrusrt.outputs.umlrts-root }}" != "/opt/papyrusrt/1.0.0/plugins/org.eclipse.papyrusrt.rts_1.0.0.201707181457/umlrts" ]; then
+                        exit 1
+                    fi
+                else
+                    echo Specified version ${{ matrix.papyrusrt-version }} is not supported
+                    exit 1
+                fi
+                if [ -n "${PAPYRUSRT_ROOT}" ]; then
+                    exit 1
+                fi
+                if [ -n "${UMLRTS_ROOT}" ]; then
+                    exit 1
+                fi
+
+      - name: Check
+        if: runner.os == 'Windows'
+        run:    |
+                if ( "${{ matrix.papyrusrt-version }}" -eq "1.0.0" )
+                {
+                    if ( "${{ steps.install-papyrusrt.outputs.papyrusrt-root }}" -ne "${env:USERPROFILE}\tools\papyrusrt\1.0.0" )
+                    {
+                        exit 1
+                    }
+                    if ( "${{ steps.install-papyrusrt.outputs.umlrts-root }}" -ne "${env:USERPROFILE}\tools\papyrusrt\1.0.0\plugins\org.eclipse.papyrusrt.rts_1.0.0.201707181457\umlrts" )
+                    {
+                        exit 1
+                    }
+                }
+                else
+                {
+                    echo Specified version ${{ matrix.papyrusrt-version }} is not supported
+                    exit 1
+                }
+                if ( "${env:PAPYRUSRT_ROOT}" -ne "" )
+                {
+                    exit 1
+                }
+                if ( "${env:UMLRTS_ROOT}" -ne "" )
+                {
+                    exit 1
+                }
+
+  IntegrationTest:
+    strategy:
+      matrix:
+# A compile error occurs on macOS. AppleClang toolcahin is used.
+# ---
+#     umlrts/os/linux/osmutex.cc:101:18: error: use of undeclared identifier 'pthread_mutex_timedlock'
+#         if ((error = pthread_mutex_timedlock((pthread_mutex_t *) mutex, &timeout)) != 0)
+#                      ^
+# ---
+#        platform: ['ubuntu-latest', 'windows-latest', 'macos-latest']
+        platform: ['ubuntu-latest', 'windows-latest']
+        papyrusrt-version: ['1.0.0']
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout VCS
+        uses: actions/checkout@v4
+      - name: Setup MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: Install Papyrus-RT
+        id:   install-papyrusrt
+        uses: ./
+        with:
+          papyrusrt-version: ${{ matrix.papyrusrt-version }}
+      - name: Checkout Test Data
+        uses: actions/checkout@v4
+        with:
+          repository: Bacondish2023/model_compiler_for_papyrusrt
+          path: model_compiler_for_papyrusrt
+          ref: v1.0.0
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.x
+
+      - name: Check
+        if: (runner.os == 'Linux') || (runner.os == 'macOs')
+        run:    |
+                make
+        working-directory: model_compiler_for_papyrusrt
+
+      - name: Check
+        if: runner.os == 'Windows'
+        run:    |
+                (Get-Content Makefile) -replace "Unix Makefiles", "NMake Makefiles" | Set-Content Makefile
+                nmake
+        working-directory: model_compiler_for_papyrusrt
