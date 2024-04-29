@@ -101,7 +101,7 @@ jobs:
           path: model_compiler_for_papyrusrt
           ref: v1.0.0
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: 3.x
 
